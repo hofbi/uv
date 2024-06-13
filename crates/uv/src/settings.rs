@@ -23,7 +23,8 @@ use uv_workspace::{Combine, PipOptions, Workspace};
 use crate::cli::{
     AddArgs, ColorChoice, GlobalArgs, IndexArgs, LockArgs, Maybe, PipCheckArgs, PipCompileArgs,
     PipFreezeArgs, PipInstallArgs, PipListArgs, PipShowArgs, PipSyncArgs, PipUninstallArgs,
-    RemoveArgs, RunArgs, SyncArgs, ToolRunArgs, ToolchainInstallArgs, ToolchainListArgs, VenvArgs,
+    RemoveArgs, RunArgs, SyncArgs, ToolRunArgs, ToolchainFindArgs, ToolchainInstallArgs,
+    ToolchainListArgs, VenvArgs,
 };
 use crate::commands::ListFormat;
 
@@ -258,6 +259,30 @@ impl ToolchainInstallSettings {
         let ToolchainInstallArgs { target } = args;
 
         Self { target }
+    }
+}
+
+/// The resolved settings to use for a `toolchain find` invocation.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone)]
+pub(crate) struct ToolchainFindSettings {
+    pub(crate) version: Option<String>,
+    pub(crate) implementation: Option<String>,
+}
+
+impl ToolchainFindSettings {
+    /// Resolve the [`ToolchainFindSettings`] from the CLI and workspace configuration.
+    #[allow(clippy::needless_pass_by_value)]
+    pub(crate) fn resolve(args: ToolchainFindArgs, _workspace: Option<Workspace>) -> Self {
+        let ToolchainFindArgs {
+            version,
+            implementation,
+        } = args;
+
+        Self {
+            version,
+            implementation,
+        }
     }
 }
 
