@@ -51,15 +51,7 @@ pub(crate) async fn remove(
     let exclude_newer = None;
 
     // Lock and sync the environment.
-    let root_project_name = project
-        .current_project()
-        .pyproject_toml()
-        .project
-        .as_ref()
-        .map(|project| project.name.clone());
-
     let lock = project::lock::do_lock(
-        root_project_name,
         project.workspace(),
         venv.interpreter(),
         &index_locations,
