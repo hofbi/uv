@@ -196,6 +196,10 @@ impl InstalledToolchains {
     }
 }
 
+static EXTERNALLY_MANAGED: &str = "[externally-managed]
+Error=This toolchain is managed by uv and should not be modified.
+";
+
 /// A uv-managed Python toolchain installed on the current system..
 #[derive(Debug, Clone)]
 pub struct InstalledToolchain {
@@ -282,6 +286,19 @@ impl InstalledToolchain {
             }
             ToolchainRequest::Version(version) => version.matches_version(&self.python_version),
         }
+    }
+
+    /// Ensure the toolchain is marked as externally managed with the
+    /// standard `EXTERNALLY-MANAGED` file.
+    pub fn ensure_externally_managed(&self) -> Result<(), Error> {
+        let file = self
+            .path
+            .join("install")
+            .join("lib")
+            .join(format!("python{}", self.python_version.python_version()))
+            .join("EXTERNALLY-MANAGED");
+        fs_err::write(file, EXTERNALLY_MANAGED)?;
+        Ok(())
     }
 }
 
