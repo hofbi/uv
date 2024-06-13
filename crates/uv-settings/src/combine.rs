@@ -7,7 +7,7 @@ use uv_configuration::{ConfigSettings, IndexStrategy, KeyringProviderType, Targe
 use uv_resolver::{AnnotationStyle, ExcludeNewer, PreReleaseMode, ResolutionMode};
 use uv_toolchain::PythonVersion;
 
-use crate::{GlobalOptions, InstallerOptions, Options, PipOptions, Workspace};
+use crate::{GlobalOptions, InstallerOptions, Options, PipOptions, ResolvedOptions};
 
 pub trait Combine {
     /// Combine two values, preferring the values in `self`.
@@ -25,14 +25,11 @@ pub trait Combine {
     fn combine(self, other: Self) -> Self;
 }
 
-impl Combine for Option<Workspace> {
-    /// Combine the options used in two [`Workspace`]s. Retains the root of `self`.
-    fn combine(self, other: Option<Workspace>) -> Option<Workspace> {
+impl Combine for Option<ResolvedOptions> {
+    /// Combine the options used in two [`ResolvedOptions`]s. Retains the root of `self`.
+    fn combine(self, other: Option<ResolvedOptions>) -> Option<ResolvedOptions> {
         match (self, other) {
-            (Some(mut a), Some(b)) => {
-                a.options = a.options.combine(b.options);
-                Some(a)
-            }
+            (Some(a), Some(b)) => Some(ResolvedOptions(a.into_options().combine(b.into_options()))),
             (a, b) => a.or(b),
         }
     }
