@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt::Write;
 use std::io::stdout;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -139,7 +140,10 @@ async fn run() -> Result<ExitStatus> {
     };
 
     // Resolve the global settings.
-    let globals = GlobalSettings::resolve(cli.global_args, configuration.as_ref());
+    let globals = GlobalSettings::resolve(&cli.global_args, configuration.as_ref());
+
+    // Resolve the cache settings.
+    let cache_settings = CacheSettings::resolve(cli.cache_args, configuration.as_ref());
 
     // Configure the `tracing` crate, which controls internal logging.
     #[cfg(feature = "tracing-durations-export")]
@@ -186,9 +190,25 @@ async fn run() -> Result<ExitStatus> {
 
     debug!("uv {}", version::version());
 
-    // Resolve the cache settings.
-    let cache = CacheSettings::resolve(cli.cache_args, configuration.as_ref());
-    let cache = Cache::from_settings(cache.no_cache, cache.cache_dir)?;
+    // Write out any resolved settings.
+    macro_rules! show_settings {
+        ($arg:expr) => {
+            if globals.show_settings {
+                writeln!(printer.stdout(), "{:#?}", $arg)?;
+                return Ok(ExitStatus::Success);
+            }
+        };
+        ($arg:expr, false) => {
+            if globals.show_settings {
+                writeln!(printer.stdout(), "{:#?}", $arg)?;
+            }
+        };
+    }
+    show_settings!(globals, false);
+    show_settings!(cache_settings, false);
+
+    // Configure the cache.
+    let cache = Cache::from_settings(cache_settings.no_cache, cache_settings.cache_dir)?;
 
     match cli.command {
         Commands::Pip(PipNamespace {
@@ -198,6 +218,8 @@ async fn run() -> Result<ExitStatus> {
 
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = PipCompileSettings::resolve(args, configuration);
+            show_settings!(args);
+
             rayon::ThreadPoolBuilder::new()
                 .num_threads(args.pip.concurrency.installs)
                 .build_global()
@@ -274,6 +296,8 @@ async fn run() -> Result<ExitStatus> {
 
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = PipSyncSettings::resolve(args, configuration);
+            show_settings!(args);
+
             rayon::ThreadPoolBuilder::new()
                 .num_threads(args.pip.concurrency.installs)
                 .build_global()
@@ -334,6 +358,8 @@ async fn run() -> Result<ExitStatus> {
 
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = PipInstallSettings::resolve(args, configuration);
+            show_settings!(args);
+
             rayon::ThreadPoolBuilder::new()
                 .num_threads(args.pip.concurrency.installs)
                 .build_global()
@@ -409,6 +435,7 @@ async fn run() -> Result<ExitStatus> {
         }) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = PipUninstallSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -444,6 +471,7 @@ async fn run() -> Result<ExitStatus> {
         }) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = PipFreezeSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -465,6 +493,7 @@ async fn run() -> Result<ExitStatus> {
 
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = PipListSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -487,6 +516,7 @@ async fn run() -> Result<ExitStatus> {
         }) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = PipShowSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -506,6 +536,7 @@ async fn run() -> Result<ExitStatus> {
         }) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = PipCheckSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -521,7 +552,10 @@ async fn run() -> Result<ExitStatus> {
         Commands::Cache(CacheNamespace {
             command: CacheCommand::Clean(args),
         })
-        | Commands::Clean(args) => commands::cache_clean(&args.package, &cache, printer),
+        | Commands::Clean(args) => {
+            show_settings!(args);
+            commands::cache_clean(&args.package, &cache, printer)
+        }
         Commands::Cache(CacheNamespace {
             command: CacheCommand::Prune,
         }) => commands::cache_prune(&cache, printer),
@@ -536,6 +570,7 @@ async fn run() -> Result<ExitStatus> {
 
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::VenvSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -572,6 +607,7 @@ async fn run() -> Result<ExitStatus> {
         Commands::Project(ProjectCommand::Run(args)) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::RunSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?.with_refresh(args.refresh);
@@ -619,6 +655,7 @@ async fn run() -> Result<ExitStatus> {
         Commands::Project(ProjectCommand::Sync(args)) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::SyncSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?.with_refresh(args.refresh);
@@ -640,6 +677,7 @@ async fn run() -> Result<ExitStatus> {
         Commands::Project(ProjectCommand::Lock(args)) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::LockSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?.with_refresh(args.refresh);
@@ -660,6 +698,7 @@ async fn run() -> Result<ExitStatus> {
         Commands::Project(ProjectCommand::Add(args)) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::AddSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -679,6 +718,7 @@ async fn run() -> Result<ExitStatus> {
         Commands::Project(ProjectCommand::Remove(args)) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::RemoveSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -712,6 +752,7 @@ async fn run() -> Result<ExitStatus> {
         }) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::ToolRunSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -738,6 +779,7 @@ async fn run() -> Result<ExitStatus> {
         }) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::ToolchainListSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;
@@ -749,6 +791,7 @@ async fn run() -> Result<ExitStatus> {
         }) => {
             // Resolve the settings from the command-line arguments and workspace configuration.
             let args = settings::ToolchainInstallSettings::resolve(args, configuration);
+            show_settings!(args);
 
             // Initialize the cache.
             let cache = cache.init()?;

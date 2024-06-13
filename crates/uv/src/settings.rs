@@ -38,12 +38,13 @@ pub(crate) struct GlobalSettings {
     pub(crate) native_tls: bool,
     pub(crate) connectivity: Connectivity,
     pub(crate) isolated: bool,
+    pub(crate) show_settings: bool,
     pub(crate) preview: PreviewMode,
 }
 
 impl GlobalSettings {
     /// Resolve the [`GlobalSettings`] from the CLI and workspace configuration.
-    pub(crate) fn resolve(args: GlobalArgs, workspace: Option<&ResolvedOptions>) -> Self {
+    pub(crate) fn resolve(args: &GlobalArgs, workspace: Option<&ResolvedOptions>) -> Self {
         Self {
             quiet: args.quiet,
             verbose: args.verbose,
@@ -76,6 +77,7 @@ impl GlobalSettings {
                 Connectivity::Online
             },
             isolated: args.isolated,
+            show_settings: args.show_settings,
             preview: PreviewMode::from(
                 flag(args.preview, args.no_preview)
                     .combine(workspace.and_then(|workspace| workspace.globals.preview))
