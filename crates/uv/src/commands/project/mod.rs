@@ -75,6 +75,22 @@ pub(crate) enum ProjectError {
     RequiresPython(#[from] uv_resolver::RequiresPythonError),
 }
 
+/// Compute the `Requires-Python` bound for the [`Workspace`].
+///
+/// For a [`Workspace`] with multiple packages, the `Requires-Python` bound is the union of the
+/// `Requires-Python` bounds of all the packages.
+pub(crate) fn find_requires_python(
+    workspace: &Workspace,
+) -> Result<Option<RequiresPython>, uv_resolver::RequiresPythonError> {
+    RequiresPython::union(workspace.packages().values().filter_map(|member| {
+        member
+            .pyproject_toml()
+            .project
+            .as_ref()
+            .and_then(|project| project.requires_python.as_ref())
+    }))
+}
+
 /// Find the virtual environment for the current project.
 pub(crate) fn find_environment(
     workspace: &Workspace,
@@ -133,14 +149,17 @@ pub(crate) fn find_interpreter(
     cache: &Cache,
     printer: Printer,
 ) -> Result<Interpreter, ProjectError> {
-    let requires_python = workspace
-        .root_member()
-        .and_then(|root| root.project().requires_python.as_ref());
+    let requires_python = find_requires_python(workspace)?;
 
     // Read from the virtual environment first
     match find_environment(workspace, cache) {
         Ok(venv) => {
-            if interpreter_meets_requirements(venv.interpreter(), python, requires_python, cache) {
+            if interpreter_meets_requirements(
+                venv.interpreter(),
+                python,
+                requires_python.as_ref().map(RequiresPython::specifiers),
+                cache,
+            ) {
                 return Ok(venv.into_interpreter());
             }
         }
@@ -150,6 +169,8 @@ pub(crate) fn find_interpreter(
 
     // Otherwise, find a system interpreter to use
     let interpreter = if let Some(request) = python.map(ToolchainRequest::parse).or(requires_python
+        .as_ref()
+        .map(RequiresPython::specifiers)
         .map(|specifiers| ToolchainRequest::Version(VersionRequest::Range(specifiers.clone()))))
     {
         Toolchain::find_requested(
@@ -163,8 +184,11 @@ pub(crate) fn find_interpreter(
     }?
     .into_interpreter();
 
-    if let Some(requires_python) = requires_python {
-        if !requires_python.contains(interpreter.python_version()) {
+    if let Some(requires_python) = requires_python.as_ref() {
+        if !requires_python
+            .specifiers()
+            .contains(interpreter.python_version())
+        {
             warn_user!(
                 "The Python {} you requested with {} is incompatible with the requirement of the \
                 project of {}",
@@ -192,14 +216,17 @@ pub(crate) fn init_environment(
     cache: &Cache,
     printer: Printer,
 ) -> Result<PythonEnvironment, ProjectError> {
-    let requires_python = workspace
-        .root_member()
-        .and_then(|root| root.project().requires_python.as_ref());
+    let requires_python = find_requires_python(workspace)?;
 
     // Check if the environment exists and is sufficient
     match find_environment(workspace, cache) {
         Ok(venv) => {
-            if interpreter_meets_requirements(venv.interpreter(), python, requires_python, cache) {
+            if interpreter_meets_requirements(
+                venv.interpreter(),
+                python,
+                requires_python.as_ref().map(RequiresPython::specifiers),
+                cache,
+            ) {
                 return Ok(venv);
             }
 
